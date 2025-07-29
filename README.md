@@ -76,7 +76,8 @@ README.md       # This documentation
 
 ## 📸 Screenshot
 
-> _Add a screenshot of the running clock here!_
+<img width="1423" height="783" alt="image" src="https://github.com/user-attachments/assets/fc176a06-0b0e-49ce-af0c-2bdec26c138c" />
+
 
 ---
 
