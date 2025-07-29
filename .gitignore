@@ -1,0 +1,9 @@
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.log
+*.user
+*.suo
+*.vcxproj*
+*.DS_Store
