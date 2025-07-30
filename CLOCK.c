@@ -257,7 +257,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             hBtnFontSwitch = CreateWindow(
                 TEXT("BUTTON"), TEXT("Switch to Pixel"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                0, 0, 220, 30, hwnd, (HMENU)ID_FONT_BTN,
+                0, 0, 400, 40, hwnd, (HMENU)ID_FONT_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             // Set initial icon
@@ -315,7 +315,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
             if (hBtnFontSwitch)
             {
-                int btnWidth = 220, btnHeight = 30;
+                int btnWidth = 400, btnHeight = 40;
                 int x = cxClient - btnWidth - 10;
                 int y = 10;
                 MoveWindow(hBtnFontSwitch, x, y, btnWidth, btnHeight, TRUE);
