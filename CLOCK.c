@@ -6,7 +6,10 @@
 #include <math.h> 
 #include <stdio.h>
 #include <mmsystem.h> 
+#include <shellapi.h>
+#include <tchar.h>
 #pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "shell32.lib")
 
 #define ID_TIMER 1
 #define ID_DARKMODE_BTN 2
@@ -14,6 +17,7 @@
 #define ID_FONT_BTN 4
 #define ID_SOUND_BTN 5
 #define ID_DOTS_BTN 6
+#define ID_MYSTERY_BTN 7
 #define TWOPI (2*3.14159)
 
 // Global variables
@@ -34,6 +38,8 @@ HICON hSoundOffIcon = NULL;
 BOOL g_bShowDots = TRUE;
 HWND hBtnDots = NULL;
 
+HWND hBtnMystery = NULL;
+
 HFONT hMinecraftFont = NULL;         
 HFONT hMinecraftBtnFont = NULL;      
 HFONT hPixelFont = NULL;
@@ -45,6 +51,7 @@ const TCHAR* romanNumerals[] = {
 };
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+void DrawColorfulQuestionMarks(HWND hwnd);
 
 // Helper function to update all button fonts
 void UpdateButtonFonts(HWND hwnd)
@@ -55,12 +62,14 @@ void UpdateButtonFonts(HWND hwnd)
     if (hBtnRomanMode) SendMessage(hBtnRomanMode, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
     if (hBtnFontSwitch) SendMessage(hBtnFontSwitch, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
     if (hBtnDots) SendMessage(hBtnDots, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
+    if (hBtnMystery) SendMessage(hBtnMystery, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
     
     // Force redraw of all buttons
     InvalidateRect(hBtnDarkMode, NULL, TRUE);
     InvalidateRect(hBtnRomanMode, NULL, TRUE);
     InvalidateRect(hBtnFontSwitch, NULL, TRUE);
     InvalidateRect(hBtnDots, NULL, TRUE);
+    InvalidateRect(hBtnMystery, NULL, TRUE);
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
@@ -90,7 +99,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     hwnd = CreateWindow(szAppName, TEXT("Analog Clock"),
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
-        CW_USEDEFAULT, CW_USEDEFAULT,
+        800, 600,  // Set initial window size
         NULL, NULL, hInstance, NULL);
 
     ShowWindow(hwnd, iCmdShow);
@@ -224,6 +233,44 @@ void DrawHands(HDC hdc, SYSTEMTIME * pst, BOOL fChange)
     DeleteObject(hPen);
 }
 
+void DrawColorfulQuestionMarks(HWND hwnd)
+{
+    PAINTSTRUCT ps;
+    HDC hdc = BeginPaint(hwnd, &ps);
+    
+    // Get button dimensions
+    RECT rc;
+    GetClientRect(hwnd, &rc);
+    
+    // Set up the font
+    HFONT hOldFont = (HFONT)SelectObject(hdc, g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont);
+    
+    // Calculate text position
+    const TCHAR* text = TEXT("???");
+    SIZE sz;
+    GetTextExtentPoint32(hdc, text, 3, &sz);
+    int x = (rc.right - sz.cx) / 2;
+    int y = (rc.bottom - sz.cy) / 2;
+    
+    // Set background mode
+    SetBkMode(hdc, TRANSPARENT);
+    
+    // Draw each question mark with different color
+    for (int i = 0; i < 3; i++)
+    {
+        COLORREF colors[] = {RGB(255, 0, 0), RGB(0, 255, 0), RGB(0, 0, 255)}; // Red, Green, Blue
+        SetTextColor(hdc, colors[i]);
+        
+        // Draw single character
+        TCHAR ch[2] = {text[i], 0};
+        TextOut(hdc, x + i * (sz.cx / 3), y, ch, 1);
+    }
+    
+    // Clean up
+    SelectObject(hdc, hOldFont);
+    EndPaint(hwnd, &ps);
+}
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static int cxClient, cyClient;
@@ -292,6 +339,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 0, 0, 220, 50, hwnd, (HMENU)ID_DOTS_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
+            // Create mystery button with owner-draw style
+            hBtnMystery = CreateWindow(
+                TEXT("BUTTON"), TEXT("???"),
+                WS_CHILD | WS_VISIBLE | BS_OWNERDRAW,
+                0, 0, 50, 50,
+                hwnd, (HMENU)ID_MYSTERY_BTN,
+                ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+
             // Set initial icon
             SendMessage(hBtnSound, BM_SETIMAGE, IMAGE_ICON,
                 (LPARAM)(g_bSoundOn ? hSoundOnIcon : hSoundOffIcon));
@@ -322,6 +377,53 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             UpdateButtonFonts(hwnd);
 
             return 0;
+        }
+
+        case WM_DRAWITEM:
+        {
+            LPDRAWITEMSTRUCT lpDrawItem = (LPDRAWITEMSTRUCT)lParam;
+            if (lpDrawItem->CtlID == ID_MYSTERY_BTN)
+            {
+                // Draw the button background
+                FillRect(lpDrawItem->hDC, &lpDrawItem->rcItem, 
+                        (HBRUSH)(COLOR_BTNFACE + 1));
+                
+                // Draw the border
+                if (lpDrawItem->itemState & ODS_SELECTED)
+                    DrawEdge(lpDrawItem->hDC, &lpDrawItem->rcItem, EDGE_SUNKEN, BF_RECT);
+                else
+                    DrawEdge(lpDrawItem->hDC, &lpDrawItem->rcItem, EDGE_RAISED, BF_RECT);
+                
+                // Set up the font
+                HFONT hOldFont = (HFONT)SelectObject(lpDrawItem->hDC, 
+                    g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont);
+                
+                // Calculate text position
+                const TCHAR* text = TEXT("???");
+                SIZE sz;
+                GetTextExtentPoint32(lpDrawItem->hDC, text, 3, &sz);
+                int x = (lpDrawItem->rcItem.right - sz.cx) / 2;
+                int y = (lpDrawItem->rcItem.bottom - sz.cy) / 2;
+                
+                // Set background mode
+                SetBkMode(lpDrawItem->hDC, TRANSPARENT);
+                
+                // Draw each question mark with different color
+                for (int i = 0; i < 3; i++)
+                {
+                    COLORREF colors[] = {RGB(255, 0, 0), RGB(0, 255, 0), RGB(0, 0, 255)}; // Red, Green, Blue
+                    SetTextColor(lpDrawItem->hDC, colors[i]);
+                    
+                    // Draw single character
+                    TCHAR ch[2] = {text[i], 0};
+                    TextOut(lpDrawItem->hDC, x + i * (sz.cx / 3), y, ch, 1);
+                }
+                
+                // Clean up
+                SelectObject(lpDrawItem->hDC, hOldFont);
+                return TRUE;
+            }
+            break;
         }
 
         case WM_SIZE:
@@ -360,6 +462,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 int x = 10;
                 int y = cyClient - btnHeight - 10;
                 MoveWindow(hBtnDots, x, y, btnWidth, btnHeight, TRUE);
+            }
+            if (hBtnMystery)
+            {
+                int btnSize = 50;  // Square size
+                int x = cxClient - btnSize - 10;
+                int y = cyClient - btnSize - 10;
+                MoveWindow(hBtnMystery, x, y, btnSize, btnSize, TRUE);
             }
             return 0;
 
@@ -400,6 +509,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
+            if (LOWORD(wParam) == ID_MYSTERY_BTN)
+            {
+                // Play the video using the full path
+                ShellExecute(NULL, TEXT("open"), TEXT("d:\\Git Uploads\\CLOCK.c\\ASTELLION.mp4"), 
+                            NULL, NULL, SW_SHOWNORMAL);
+                return 0;
+            }
             break;
 
         case WM_TIMER:
@@ -427,6 +543,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             InvalidateRect(hBtnDarkMode, NULL, TRUE);
             InvalidateRect(hBtnFontSwitch, NULL, TRUE);
             InvalidateRect(hBtnDots, NULL, TRUE);
+            InvalidateRect(hBtnMystery, NULL, TRUE);
             UpdateWindow(hwnd);
 
             ReleaseDC(hwnd, hdc);
@@ -452,6 +569,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             RedrawWindow(hBtnDarkMode, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
             RedrawWindow(hBtnFontSwitch, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
             RedrawWindow(hBtnDots, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            RedrawWindow(hBtnMystery, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
             return 0;
 
         case WM_DESTROY:
