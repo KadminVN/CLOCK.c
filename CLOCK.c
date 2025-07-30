@@ -4,14 +4,13 @@
 
 #include <windows.h>
 #include <math.h> 
-#include <stdio.h> // For sprintf
+#include <stdio.h>
 
 #define ID_TIMER 1
 #define ID_DARKMODE_BTN 2
 #define ID_ROMAN_BTN 3
 #define TWOPI (2*3.14159)
 
-// Global variable for dark mode
 BOOL g_bDarkMode = FALSE;
 HWND hBtnDarkMode = NULL;
 
@@ -67,7 +66,6 @@ void SetIsotropic (HDC hdc, int cxClient, int cyClient)
     if (iScale == 0) iScale = 1;
 
     SetMapMode (hdc, MM_ISOTROPIC);
-    // Reduce logical window extent from 800x800 to 600x600 for a smaller clock
     SetWindowExtEx (hdc, 600, 600, NULL);
     SetViewportExtEx (hdc, iScale, -iScale, NULL);
     SetViewportOrgEx (hdc, cxClient / 2, cyClient / 2, NULL);
@@ -88,11 +86,10 @@ void RotatePoint (POINT pt[], int iNum, int iAngle)
     }
 }
 
-HFONT hMinecraftFont = NULL;         // For numbers on the clock
-HFONT hMinecraftBtnFont = NULL;      // For button text
+HFONT hMinecraftFont = NULL;         
+HFONT hMinecraftBtnFont = NULL;      
 HANDLE hFontRes = NULL;
 
-// Roman numerals for 1-12
 const TCHAR* romanNumerals[] = {
     TEXT(""), TEXT("I"), TEXT("II"), TEXT("III"), TEXT("IV"), TEXT("V"),
     TEXT("VI"), TEXT("VII"), TEXT("VIII"), TEXT("IX"), TEXT("X"), TEXT("XI"), TEXT("XII")
@@ -105,19 +102,16 @@ void DrawClock (HDC hdc)
     HBRUSH hBrush, hOldBrush;
     HFONT hOldFont = NULL;
 
-    // Set brush color based on dark mode
     hBrush = CreateSolidBrush(g_bDarkMode ? RGB(255,255,255) : RGB(0,0,0));
     hOldBrush = SelectObject(hdc, hBrush);
 
     for(iAngle = 0; iAngle < 360; iAngle += 6)
     {
-        // Reduce radius from 700 to 500 for a smaller clock face
         pt[0].x = 0;
         pt[0].y = 500;
 
         RotatePoint (pt, 1, iAngle);
 
-        // Reduce tick size for smaller clock
         pt[2].x = pt[2].y = iAngle % 5 ? 18 : 55;
 
         pt[0].x -= pt[2].x / 2;
@@ -128,7 +122,6 @@ void DrawClock (HDC hdc)
 
         Ellipse (hdc, pt[0].x, pt[0].y, pt[1].x, pt[1].y);
 
-        // Draw hour numbers using Minecraft font (larger font)
         if (iAngle % 30 == 0 && hMinecraftFont) {
             int hour = iAngle / 30;
             if (hour == 0) hour = 12;
@@ -136,7 +129,6 @@ void DrawClock (HDC hdc)
             int numRadius = 450;
             int tx = (int)(0 + numRadius * sin(rad));
             int ty = (int)(0 + numRadius * cos(rad)) + 35;
-            // Use Roman or Arabic numerals
             const TCHAR* label = g_bRomanMode ? romanNumerals[hour] : NULL;
             TCHAR buf[8];
             if (g_bRomanMode) {
@@ -160,11 +152,10 @@ void DrawClock (HDC hdc)
 
 void DrawHands (HDC hdc, SYSTEMTIME * pst, BOOL fChange)
 {
-    // Reduce hand lengths for smaller clock
     static POINT pt[3][5] = {
-        {0, -110, 70, 0, 0, 300, -70, 0, 0, -110},   // hour hand
-        {0, -150, 40, 0, 0, 420, -40, 0, 0, -150},   // minute hand
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 420}            // second hand
+        {0, -110, 70, 0, 0, 300, -70, 0, 0, -110}, 
+        {0, -150, 40, 0, 0, 420, -40, 0, 0, -150},   
+        {0, 0, 0, 0, 0, 0, 0, 0, 0, 420}           
     };
     int i, iAngle[3];
     POINT ptTemp[3][5];
@@ -208,13 +199,11 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message,
             SetTimer (hwnd, ID_TIMER, 1000, NULL);
             GetLocalTime (&st);
             stPrevious = st;
-            // Create Roman mode button (top middle, wider)
             hBtnRomanMode = CreateWindow(
                 TEXT("BUTTON"), TEXT("Switch to Roman"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                 0, 0, 260, 30, hwnd, (HMENU)ID_ROMAN_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
-            // Create dark mode button (bottom middle)
             hBtnDarkMode = CreateWindow(
                 TEXT("BUTTON"), TEXT("Dark Mode"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
@@ -244,7 +233,6 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message,
         case WM_SIZE:
             cxClient = LOWORD (lParam);
             cyClient = HIWORD (lParam);
-            // Position Roman mode button at top middle, dark mode at bottom middle
             if (hBtnRomanMode)
             {
                 int btnWidth = 260, btnHeight = 30;
@@ -293,17 +281,14 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message,
             
             hdc = GetDC (hwnd);
             
-            // Xóa toàn bộ vùng client
             GetClientRect(hwnd, &rect);
             FillRect(hdc, &rect, (HBRUSH)GetStockObject(g_bDarkMode ? BLACK_BRUSH : WHITE_BRUSH));
             
             SetIsotropic (hdc, cxClient, cyClient);
             
-            // Vẽ lại đồng hồ (chỉ các vạch chia và kim)
             DrawClock (hdc);
             DrawHands (hdc, &st, TRUE);
 
-            // Force redraw the buttons above the clock
             if (hBtnDarkMode)
                 RedrawWindow(hBtnDarkMode, NULL, NULL, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
             if (hBtnRomanMode)
@@ -325,7 +310,6 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT message,
             DrawClock (hdc);
             DrawHands (hdc, &stPrevious, TRUE);
 
-            // Force redraw the buttons above the clock
             if (hBtnDarkMode)
                 RedrawWindow(hBtnDarkMode, NULL, NULL, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW);
             if (hBtnRomanMode)
