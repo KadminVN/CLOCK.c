@@ -1,6 +1,5 @@
 /*--------------------------
     CLOCK.C -- Analog Clock Program
-    (Icons Always Visible Version)
 ---------------------------*/
 
 #include <windows.h>
@@ -14,6 +13,7 @@
 #define ID_ROMAN_BTN 3
 #define ID_FONT_BTN 4
 #define ID_SOUND_BTN 5
+#define ID_DOTS_BTN 6
 #define TWOPI (2*3.14159)
 
 // Global variables
@@ -31,6 +31,9 @@ HWND hBtnSound = NULL;
 HICON hSoundOnIcon = NULL;
 HICON hSoundOffIcon = NULL;
 
+BOOL g_bShowDots = TRUE;
+HWND hBtnDots = NULL;
+
 HFONT hMinecraftFont = NULL;         
 HFONT hMinecraftBtnFont = NULL;      
 HFONT hPixelFont = NULL;
@@ -42,6 +45,23 @@ const TCHAR* romanNumerals[] = {
 };
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+
+// Helper function to update all button fonts
+void UpdateButtonFonts(HWND hwnd)
+{
+    HFONT hCurrentBtnFont = g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont;
+    
+    if (hBtnDarkMode) SendMessage(hBtnDarkMode, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
+    if (hBtnRomanMode) SendMessage(hBtnRomanMode, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
+    if (hBtnFontSwitch) SendMessage(hBtnFontSwitch, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
+    if (hBtnDots) SendMessage(hBtnDots, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
+    
+    // Force redraw of all buttons
+    InvalidateRect(hBtnDarkMode, NULL, TRUE);
+    InvalidateRect(hBtnRomanMode, NULL, TRUE);
+    InvalidateRect(hBtnFontSwitch, NULL, TRUE);
+    InvalidateRect(hBtnDots, NULL, TRUE);
+}
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
 {
@@ -121,24 +141,30 @@ void DrawClock(HDC hdc)
     hBrush = CreateSolidBrush(g_bDarkMode ? RGB(255, 255, 255) : RGB(0, 0, 0));
     hOldBrush = SelectObject(hdc, hBrush);
 
-    for (iAngle = 0; iAngle < 360; iAngle += 6)
+    if (g_bShowDots)
     {
-        pt[0].x = 0;
-        pt[0].y = 500;
+        for (iAngle = 0; iAngle < 360; iAngle += 6)
+        {
+            pt[0].x = 0;
+            pt[0].y = 500;
 
-        RotatePoint(pt, 1, iAngle);
+            RotatePoint(pt, 1, iAngle);
 
-        pt[2].x = pt[2].y = iAngle % 5 ? 18 : 55;
+            pt[2].x = pt[2].y = iAngle % 5 ? 18 : 55;
 
-        pt[0].x -= pt[2].x / 2;
-        pt[0].y -= pt[2].y / 2;
+            pt[0].x -= pt[2].x / 2;
+            pt[0].y -= pt[2].y / 2;
 
-        pt[1].x = pt[0].x + pt[2].x;
-        pt[1].y = pt[0].y + pt[2].y;
+            pt[1].x = pt[0].x + pt[2].x;
+            pt[1].y = pt[0].y + pt[2].y;
 
-        Ellipse(hdc, pt[0].x, pt[0].y, pt[1].x, pt[1].y);
+            Ellipse(hdc, pt[0].x, pt[0].y, pt[1].x, pt[1].y);
+        }
+    }
 
-        if (iAngle % 30 == 0 && hCurrentFont) {
+    for (iAngle = 0; iAngle < 360; iAngle += 30)
+    {
+        if (hCurrentFont) {
             int hour = iAngle / 30;
             if (hour == 0) hour = 12;
             double rad = iAngle * 3.14159265358979323846 / 180.0;
@@ -245,19 +271,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             hBtnRomanMode = CreateWindow(
                 TEXT("BUTTON"), TEXT("Switch to Roman"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                0, 0, 260, 30, hwnd, (HMENU)ID_ROMAN_BTN,
+                0, 0, 260, 50, hwnd, (HMENU)ID_ROMAN_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnDarkMode = CreateWindow(
                 TEXT("BUTTON"), TEXT("Dark Mode"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                0, 0, 180, 30, hwnd, (HMENU)ID_DARKMODE_BTN,
+                0, 0, 180, 50, hwnd, (HMENU)ID_DARKMODE_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnFontSwitch = CreateWindow(
                 TEXT("BUTTON"), TEXT("Switch to Pixel"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                 0, 0, 400, 40, hwnd, (HMENU)ID_FONT_BTN,
+                ((LPCREATESTRUCT)lParam)->hInstance, NULL);
+
+            hBtnDots = CreateWindow(
+                TEXT("BUTTON"), TEXT("Disable Dots"),
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                0, 0, 220, 50, hwnd, (HMENU)ID_DOTS_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             // Set initial icon
@@ -282,14 +314,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
                 FF_DONTCARE, TEXT("Dogica"));
 
-            hPixelBtnFont = CreateFont(-12, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            hPixelBtnFont = CreateFont(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
                 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
                 FF_DONTCARE, TEXT("Dogica"));
 
-            // Set fonts for buttons
-            if (hBtnDarkMode) SendMessage(hBtnDarkMode, WM_SETFONT, (WPARAM)hMinecraftBtnFont, TRUE);
-            if (hBtnRomanMode) SendMessage(hBtnRomanMode, WM_SETFONT, (WPARAM)hMinecraftBtnFont, TRUE);
-            if (hBtnFontSwitch) SendMessage(hBtnFontSwitch, WM_SETFONT, (WPARAM)hMinecraftBtnFont, TRUE);
+            // Set initial fonts for all buttons
+            UpdateButtonFonts(hwnd);
 
             return 0;
         }
@@ -301,14 +331,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Position buttons
             if (hBtnRomanMode)
             {
-                int btnWidth = 260, btnHeight = 30;
+                int btnWidth = 260, btnHeight = 50;
                 int x = (cxClient - btnWidth) / 2;
                 int y = 10;
                 MoveWindow(hBtnRomanMode, x, y, btnWidth, btnHeight, TRUE);
             }
             if (hBtnDarkMode)
             {
-                int btnWidth = 180, btnHeight = 30;
+                int btnWidth = 180, btnHeight = 50;
                 int x = (cxClient - btnWidth) / 2;
                 int y = cyClient - btnHeight - 10;
                 MoveWindow(hBtnDarkMode, x, y, btnWidth, btnHeight, TRUE);
@@ -324,6 +354,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 MoveWindow(hBtnSound, 10, 10, 40, 40, TRUE);
             }
+            if (hBtnDots)
+            {
+                int btnWidth = 220, btnHeight = 50;
+                int x = 10;
+                int y = cyClient - btnHeight - 10;
+                MoveWindow(hBtnDots, x, y, btnWidth, btnHeight, TRUE);
+            }
             return 0;
 
         case WM_COMMAND:
@@ -331,7 +368,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 g_bDarkMode = !g_bDarkMode;
                 SetWindowText(hBtnDarkMode, g_bDarkMode ? TEXT("Light Mode") : TEXT("Dark Mode"));
-                InvalidateRect(hwnd, NULL, FALSE);  // Changed to FALSE to prevent flicker
+                InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
             if (LOWORD(wParam) == ID_ROMAN_BTN)
@@ -345,6 +382,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
                 g_bUsePixelFont = !g_bUsePixelFont;
                 SetWindowText(hBtnFontSwitch, g_bUsePixelFont ? TEXT("Switch to Minecraft") : TEXT("Switch to Pixel"));
+                UpdateButtonFonts(hwnd);
                 InvalidateRect(hwnd, NULL, FALSE);
                 return 0;
             }
@@ -355,6 +393,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                     (LPARAM)(g_bSoundOn ? hSoundOnIcon : hSoundOffIcon));
                 return 0;
             }
+            if (LOWORD(wParam) == ID_DOTS_BTN)
+            {
+                g_bShowDots = !g_bShowDots;
+                SetWindowText(hBtnDots, g_bShowDots ? TEXT("Disable Dots") : TEXT("Enable Dots"));
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
             break;
 
         case WM_TIMER:
@@ -363,13 +408,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             hdc = GetDC(hwnd);
             
-            // Only redraw the clock area, not the buttons
-            RECT clockRect;
-            GetClientRect(hwnd, &clockRect);
-            clockRect.top += 50;  // Leave space for top buttons
-            clockRect.bottom -= 50; // Leave space for bottom buttons
-            
-            FillRect(hdc, &clockRect, (HBRUSH)GetStockObject(g_bDarkMode ? BLACK_BRUSH : WHITE_BRUSH));
+            // Draw the clock
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            FillRect(hdc, &rect, (HBRUSH)GetStockObject(g_bDarkMode ? BLACK_BRUSH : WHITE_BRUSH));
             
             SetIsotropic(hdc, cxClient, cyClient);
             DrawClock(hdc);
@@ -379,6 +421,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 PlaySound(TEXT("d:\\Git Uploads\\CLOCK.c\\Tick.wav"), NULL, SND_FILENAME | SND_ASYNC);
             }
 
+            // Force buttons to redraw on top of the clock
+            InvalidateRect(hBtnSound, NULL, TRUE);
+            InvalidateRect(hBtnRomanMode, NULL, TRUE);
+            InvalidateRect(hBtnDarkMode, NULL, TRUE);
+            InvalidateRect(hBtnFontSwitch, NULL, TRUE);
+            InvalidateRect(hBtnDots, NULL, TRUE);
+            UpdateWindow(hwnd);
+
             ReleaseDC(hwnd, hdc);
             stPrevious = st;
             return 0;
@@ -386,36 +436,39 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_PAINT:
             hdc = BeginPaint(hwnd, &ps);
             
-            // Fill background
+            // Draw the clock first
             GetClientRect(hwnd, &rect);
             FillRect(hdc, &rect, (HBRUSH)GetStockObject(g_bDarkMode ? BLACK_BRUSH : WHITE_BRUSH));
             
-            // Draw clock
             SetIsotropic(hdc, cxClient, cyClient);
             DrawClock(hdc);
             DrawHands(hdc, &stPrevious, TRUE);
             
             EndPaint(hwnd, &ps);
+            
+            // Force buttons to redraw on top
+            RedrawWindow(hBtnSound, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            RedrawWindow(hBtnRomanMode, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            RedrawWindow(hBtnDarkMode, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            RedrawWindow(hBtnFontSwitch, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
+            RedrawWindow(hBtnDots, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW);
             return 0;
 
         case WM_DESTROY:
             KillTimer(hwnd, ID_TIMER);
 
-            // Cleanup fonts
             if (hMinecraftFont) DeleteObject(hMinecraftFont);
             if (hMinecraftBtnFont) DeleteObject(hMinecraftBtnFont);
             if (hPixelFont) DeleteObject(hPixelFont);
             if (hPixelBtnFont) DeleteObject(hPixelBtnFont);
 
-            // Cleanup icons
             if (hSoundOnIcon) DestroyIcon(hSoundOnIcon);
             if (hSoundOffIcon) DestroyIcon(hSoundOffIcon);
 
-            // Cleanup font resources
             RemoveFontResourceEx(TEXT("d:\\Git Uploads\\CLOCK.c\\Minecraft.ttf"), FR_PRIVATE, 0);
             RemoveFontResourceEx(TEXT("d:\\Git Uploads\\CLOCK.c\\Dogica.ttf"), FR_PRIVATE, 0);
 
-            PlaySound(NULL, 0, 0); // Stop any playing sound
+            PlaySound(NULL, 0, 0);
             PostQuitMessage(0);
             return 0;
     }
