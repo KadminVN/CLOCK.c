@@ -2,5 +2,5 @@
 
 IDI_SOUND_ON ICON "sound_on.ico"
 IDI_SOUND_OFF ICON "sound_off.ico"
-IDR_MC_FONT BINARY "Minecraft.ttf"
-IDR_PIXEL_FONT BINARY "Dogica.ttf"
+IDR_MC_FONT FONT "Minecraft.ttf"
+IDR_PIXEL_FONT FONT "Dogica.ttf"

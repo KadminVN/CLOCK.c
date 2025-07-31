@@ -23,12 +23,6 @@
 #define ID_MYSTERY_BTN 7
 #define TWOPI (2*3.14159)
 
-// Resource IDs
-#define IDI_SOUND_ON     101
-#define IDI_SOUND_OFF    102
-#define IDR_MC_FONT      103
-#define IDR_PIXEL_FONT   104
-
 // Global variables
 BOOL g_bDarkMode = FALSE;
 HWND hBtnDarkMode = NULL;
@@ -36,7 +30,7 @@ HWND hBtnDarkMode = NULL;
 BOOL g_bRomanMode = FALSE;
 HWND hBtnRomanMode = NULL;
 
-BOOL g_bUsePixelFont = FALSE;
+BOOL g_bUseLightFont = FALSE;
 HWND hBtnFontSwitch = NULL;
 
 BOOL g_bSoundOn = TRUE;
@@ -49,10 +43,10 @@ HWND hBtnDots = NULL;
 
 HWND hBtnMystery = NULL;
 
-HFONT hMinecraftFont = NULL;         
-HFONT hMinecraftBtnFont = NULL;      
-HFONT hPixelFont = NULL;
-HFONT hPixelBtnFont = NULL;      
+HFONT hHeavyFont = NULL;
+HFONT hHeavyBtnFont = NULL;
+HFONT hLightFont = NULL;
+HFONT hLightBtnFont = NULL;
 
 const TCHAR* romanNumerals[] = {
     TEXT(""), TEXT("I"), TEXT("II"), TEXT("III"), TEXT("IV"), TEXT("V"),
@@ -62,14 +56,13 @@ const TCHAR* romanNumerals[] = {
 // Function prototypes
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void UpdateButtonFonts(HWND hwnd);
-BOOL LoadEmbeddedResources(HINSTANCE hInstance);
+BOOL LoadFonts();
 void FreeResources();
 void PlayMysteryVideo();
 void SetIsotropic(HDC hdc, int cxClient, int cyClient);
 void RotatePoint(POINT pt[], int iNum, int iAngle);
 void DrawClock(HDC hdc);
 void DrawHands(HDC hdc, SYSTEMTIME * pst, BOOL fChange);
-void DrawColorfulQuestionMarks(HWND hwnd);
 
 // Helper function to get executable directory
 BOOL GetExeDirectory(TCHAR* buffer, DWORD size)
@@ -81,6 +74,42 @@ BOOL GetExeDirectory(TCHAR* buffer, DWORD size)
     return TRUE;
 }
 
+// Function to load icons from embedded resources or files
+BOOL LoadSoundIcons(HINSTANCE hInstance)
+{
+    // Try loading from resources first
+    hSoundOnIcon = LoadIcon(hInstance, MAKEINTRESOURCE(101));
+    hSoundOffIcon = LoadIcon(hInstance, MAKEINTRESOURCE(102));
+    
+    // If not found in resources, try loading from files in executable directory
+    if (!hSoundOnIcon || !hSoundOffIcon)
+    {
+        TCHAR exePath[MAX_PATH];
+        if (GetExeDirectory(exePath, MAX_PATH))
+        {
+            TCHAR iconPath[MAX_PATH];
+            
+            // Try loading sound_on.ico
+            PathCombine(iconPath, exePath, TEXT("sound_on.ico"));
+            if (PathFileExists(iconPath))
+                hSoundOnIcon = (HICON)LoadImage(NULL, iconPath, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+            
+            // Try loading sound_off.ico
+            PathCombine(iconPath, exePath, TEXT("sound_off.ico"));
+            if (PathFileExists(iconPath))
+                hSoundOffIcon = (HICON)LoadImage(NULL, iconPath, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+        }
+    }
+    
+    // If still not loaded, use system icons as fallback
+    if (!hSoundOnIcon)
+        hSoundOnIcon = LoadIcon(NULL, IDI_INFORMATION);
+    if (!hSoundOffIcon)
+        hSoundOffIcon = LoadIcon(NULL, IDI_WARNING);
+    
+    return (hSoundOnIcon && hSoundOffIcon);
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow)
 {
     static TCHAR szAppName[] = TEXT("Clock");
@@ -88,10 +117,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     MSG msg;
     WNDCLASS wndclass;
 
-    // Load embedded resources
-    if (!LoadEmbeddedResources(hInstance))
+    // Load sound icons
+    if (!LoadSoundIcons(hInstance))
     {
-        MessageBox(NULL, TEXT("Failed to load required resources!"), szAppName, MB_ICONERROR);
+        MessageBox(NULL, TEXT("Failed to load sound icons!"), szAppName, MB_ICONWARNING);
+    }
+    
+    if (!LoadFonts())
+    {
+        MessageBox(NULL, TEXT("Failed to load required fonts!"), szAppName, MB_ICONERROR);
         return 0;
     }
 
@@ -138,173 +172,134 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine,
     return msg.wParam;
 }
 
-// Resource loading functions
-BOOL LoadEmbeddedResources(HINSTANCE hInstance)
+// Font loading function (unchanged from your original)
+BOOL LoadFonts()
 {
-    // Load icons from resources
-    hSoundOnIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SOUND_ON));
-    hSoundOffIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_SOUND_OFF));
-    
-    if (!hSoundOnIcon || !hSoundOffIcon)
-    {
-        hSoundOnIcon = LoadIcon(NULL, IDI_INFORMATION);
-        hSoundOffIcon = LoadIcon(NULL, IDI_WARNING);
-    }
+    TCHAR fontPath[MAX_PATH];
+    BOOL bMinecraftLoaded = FALSE;
+    BOOL bDogicaLoaded = FALSE;
 
-    // Load Minecraft font
-    HRSRC hRes = FindResource(hInstance, MAKEINTRESOURCE(IDR_MC_FONT), RT_FONT);
-    if (hRes)
+    if (GetExeDirectory(fontPath, MAX_PATH))
     {
-        HGLOBAL hFontRes = LoadResource(hInstance, hRes);
-        if (hFontRes)
+        TCHAR mcPath[MAX_PATH];
+        PathCombine(mcPath, fontPath, TEXT("Minecraft.ttf"));
+        if (PathFileExists(mcPath))
         {
-            DWORD nFonts = 0;
-            DWORD fontSize = SizeofResource(hInstance, hRes);
-            void* fontData = LockResource(hFontRes);
-            AddFontMemResourceEx(fontData, fontSize, NULL, &nFonts);
+            bMinecraftLoaded = AddFontResourceEx(mcPath, FR_PRIVATE, NULL) > 0;
+        }
+
+        TCHAR dogicaPath[MAX_PATH];
+        PathCombine(dogicaPath, fontPath, TEXT("Dogica.ttf"));
+        if (PathFileExists(dogicaPath))
+        {
+            bDogicaLoaded = AddFontResourceEx(dogicaPath, FR_PRIVATE, NULL) > 0;
         }
     }
 
-    // Load Dogica font with proper error handling
-    hRes = FindResource(hInstance, MAKEINTRESOURCE(IDR_PIXEL_FONT), RT_FONT);
-    if (!hRes)
-    {
-        MessageBox(NULL, TEXT("Dogica font resource not found!"), TEXT("Error"), MB_ICONERROR);
-    }
-    else
-    {
-        HGLOBAL hFontRes = LoadResource(hInstance, hRes);
-        if (!hFontRes)
-        {
-            MessageBox(NULL, TEXT("Failed to load Dogica font resource!"), TEXT("Error"), MB_ICONERROR);
-        }
-        else
-        {
-            DWORD nFonts = 0;
-            DWORD fontSize = SizeofResource(hInstance, hRes);
-            void* fontData = LockResource(hFontRes);
-            
-            HANDLE hFont = AddFontMemResourceEx(fontData, fontSize, NULL, &nFonts);
-            if (!hFont)
-            {
-                MessageBox(NULL, TEXT("Failed to register Dogica font!"), TEXT("Error"), MB_ICONERROR);
-            }
-        }
-    }
-
-    // Create fonts with verification
-    hMinecraftFont = CreateFont(-40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+    hHeavyFont = CreateFont(-40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         FF_DONTCARE, TEXT("Minecraft"));
 
-    hMinecraftBtnFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+    if (!hHeavyFont)
+    {
+        const TCHAR* heavyFallbacks[] = {
+            TEXT("Minecraft Regular"), TEXT("Lucida Console"), TEXT("Courier New"), NULL
+        };
+        
+        for (int i = 0; heavyFallbacks[i] && !hHeavyFont; i++)
+        {
+            hHeavyFont = CreateFont(-40, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                FF_DONTCARE, heavyFallbacks[i]);
+        }
+    }
+
+    hHeavyBtnFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
         FF_DONTCARE, TEXT("Minecraft"));
 
-    // Try multiple variations of Dogica font names
-    const TCHAR* dogicaNames[] = {
-        TEXT("Dogica"),
-        TEXT("Dogica Pixel"),
-        TEXT("Dogica Bold"),
-        TEXT("Dogica Regular"),
-        TEXT("Pixel"),
-        NULL
+    if (!hHeavyBtnFont)
+    {
+        const TCHAR* heavyBtnFallbacks[] = {
+            TEXT("Minecraft Regular"), TEXT("Lucida Console"), TEXT("Courier New"), NULL
+        };
+        
+        for (int i = 0; heavyBtnFallbacks[i] && !hHeavyBtnFont; i++)
+        {
+            hHeavyBtnFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+                DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                FF_DONTCARE, heavyBtnFallbacks[i]);
+        }
+    }
+
+    const TCHAR* lightFontNames[] = {
+        TEXT("Dogica"), TEXT("Dogica Pixel"), TEXT("Dogica Bold"), 
+        TEXT("Dogica Regular"), TEXT("Courier New"), NULL
     };
 
-    hPixelFont = NULL;
-    hPixelBtnFont = NULL;
-
-    // Try all possible names for the main font
-    for (int i = 0; dogicaNames[i] && !hPixelFont; i++)
+    for (int i = 0; lightFontNames[i] && !hLightFont; i++)
     {
-        hPixelFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-            FF_DONTCARE, dogicaNames[i]);
-        
-        // Verify the font was actually created with the requested face
-        if (hPixelFont)
-        {
-            HDC hdc = GetDC(NULL);
-            HFONT oldFont = (HFONT)SelectObject(hdc, hPixelFont);
-            
-            TCHAR actualFontName[LF_FACESIZE];
-            GetTextFace(hdc, LF_FACESIZE, actualFontName);
-            
-            SelectObject(hdc, oldFont);
-            ReleaseDC(NULL, hdc);
-            
-            if (_tcsicmp(actualFontName, dogicaNames[i]))
-            {
-                DeleteObject(hPixelFont);
-                hPixelFont = NULL;
-            }
-        }
+        hLightFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            FF_DONTCARE, lightFontNames[i]);
     }
 
-    // Try all possible names for the button font
-    for (int i = 0; dogicaNames[i] && !hPixelBtnFont; i++)
+    for (int i = 0; lightFontNames[i] && !hLightBtnFont; i++)
     {
-        hPixelBtnFont = CreateFont(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-            FF_DONTCARE, dogicaNames[i]);
-            
-        // Verify the button font
-        if (hPixelBtnFont)
-        {
-            HDC hdc = GetDC(NULL);
-            HFONT oldFont = (HFONT)SelectObject(hdc, hPixelBtnFont);
-            
-            TCHAR actualFontName[LF_FACESIZE];
-            GetTextFace(hdc, LF_FACESIZE, actualFontName);
-            
-            SelectObject(hdc, oldFont);
-            ReleaseDC(NULL, hdc);
-            
-            if (_tcsicmp(actualFontName, dogicaNames[i]))
-            {
-                DeleteObject(hPixelBtnFont);
-                hPixelBtnFont = NULL;
-            }
-        }
+        hLightBtnFont = CreateFont(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            FF_DONTCARE, lightFontNames[i]);
     }
 
-    // Final fallback if Dogica not found
-    if (!hPixelFont || !hPixelBtnFont)
+    if (!hLightFont)
     {
-        MessageBox(NULL, 
-            TEXT("Dogica font not available. Using Arial instead.\n")
-            TEXT("Please ensure the Dogica font is properly embedded."), 
-            TEXT("Font Warning"), MB_ICONWARNING);
-            
-        hPixelFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-            FF_DONTCARE, TEXT("Arial"));
-            
-        hPixelBtnFont = CreateFont(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-            FF_DONTCARE, TEXT("Arial"));
+        hLightFont = CreateFont(-24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            FF_DONTCARE, TEXT("Courier New"));
+    }
+    
+    if (!hLightBtnFont)
+    {
+        hLightBtnFont = CreateFont(-16, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+            FF_DONTCARE, TEXT("Courier New"));
     }
 
-    // Fallback for Minecraft fonts
-    if (!hMinecraftFont || !hMinecraftBtnFont)
-    {
-        hMinecraftFont = hMinecraftBtnFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-    }
-
-    return TRUE;
+    return (hHeavyFont && hHeavyBtnFont && hLightFont && hLightBtnFont);
 }
 
 void FreeResources()
 {
-    if (hMinecraftFont && hMinecraftFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
-        DeleteObject(hMinecraftFont);
-    if (hMinecraftBtnFont && hMinecraftBtnFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
-        DeleteObject(hMinecraftBtnFont);
-    if (hPixelFont && hPixelFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
-        DeleteObject(hPixelFont);
-    if (hPixelBtnFont && hPixelBtnFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
-        DeleteObject(hPixelBtnFont);
+    // Remove temporary font resources
+    TCHAR fontPath[MAX_PATH];
+    if (GetExeDirectory(fontPath, MAX_PATH))
+    {
+        TCHAR mcPath[MAX_PATH];
+        PathCombine(mcPath, fontPath, TEXT("Minecraft.ttf"));
+        if (PathFileExists(mcPath))
+        {
+            RemoveFontResourceEx(mcPath, FR_PRIVATE, NULL);
+        }
+        
+        TCHAR dogicaPath[MAX_PATH];
+        PathCombine(dogicaPath, fontPath, TEXT("Dogica.ttf"));
+        if (PathFileExists(dogicaPath))
+        {
+            RemoveFontResourceEx(dogicaPath, FR_PRIVATE, NULL);
+        }
+    }
 
+    // Delete font objects
+    if (hHeavyFont && hHeavyFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
+        DeleteObject(hHeavyFont);
+    if (hHeavyBtnFont && hHeavyBtnFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
+        DeleteObject(hHeavyBtnFont);
+    if (hLightFont && hLightFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
+        DeleteObject(hLightFont);
+    if (hLightBtnFont && hLightBtnFont != (HFONT)GetStockObject(DEFAULT_GUI_FONT))
+        DeleteObject(hLightBtnFont);
+
+    // Clean up icons
     if (hSoundOnIcon && hSoundOnIcon != LoadIcon(NULL, IDI_INFORMATION))
         DestroyIcon(hSoundOnIcon);
     if (hSoundOffIcon && hSoundOffIcon != LoadIcon(NULL, IDI_WARNING))
@@ -313,7 +308,7 @@ void FreeResources()
 
 void UpdateButtonFonts(HWND hwnd)
 {
-    HFONT hCurrentBtnFont = g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont;
+    HFONT hCurrentBtnFont = g_bUseLightFont ? hLightBtnFont : hHeavyBtnFont;
     
     if (hBtnRomanMode)
         SendMessage(hBtnRomanMode, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
@@ -326,7 +321,6 @@ void UpdateButtonFonts(HWND hwnd)
     if (hBtnMystery)
         SendMessage(hBtnMystery, WM_SETFONT, (WPARAM)hCurrentBtnFont, TRUE);
     
-    // Redraw all buttons
     InvalidateRect(hBtnRomanMode, NULL, TRUE);
     InvalidateRect(hBtnDarkMode, NULL, TRUE);
     InvalidateRect(hBtnFontSwitch, NULL, TRUE);
@@ -349,7 +343,7 @@ void PlayMysteryVideo()
         else
         {
             MessageBox(NULL, 
-                TEXT("Mystery video not found!\nPlease place ASTELLION.mp4 in:\n") TEXT("%s"),
+                TEXT("Mystery video not found!\nPlease place ASTELLION.mp4 in the same directory as the program."),
                 TEXT("Clock"), 
                 MB_ICONINFORMATION);
         }
@@ -394,7 +388,7 @@ void DrawClock(HDC hdc)
     POINT pt[3];
     HBRUSH hBrush, hOldBrush;
     HFONT hOldFont = NULL;
-    HFONT hCurrentFont = g_bUsePixelFont ? hPixelFont : hMinecraftFont;
+    HFONT hCurrentFont = g_bUseLightFont ? hLightFont : hHeavyFont;
 
     hBrush = CreateSolidBrush(g_bDarkMode ? RGB(255, 255, 255) : RGB(0, 0, 0));
     hOldBrush = SelectObject(hdc, hBrush);
@@ -482,36 +476,6 @@ void DrawHands(HDC hdc, SYSTEMTIME * pst, BOOL fChange)
     DeleteObject(hPen);
 }
 
-void DrawColorfulQuestionMarks(HWND hwnd)
-{
-    PAINTSTRUCT ps;
-    HDC hdc = BeginPaint(hwnd, &ps);
-    
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    
-    HFONT hOldFont = (HFONT)SelectObject(hdc, g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont);
-    
-    const TCHAR* text = TEXT("???");
-    SIZE sz;
-    GetTextExtentPoint32(hdc, text, 3, &sz);
-    int x = (rc.right - sz.cx) / 2;
-    int y = (rc.bottom - sz.cy) / 2;
-    
-    SetBkMode(hdc, TRANSPARENT);
-    
-    for (int i = 0; i < 3; i++)
-    {
-        COLORREF colors[] = {RGB(255, 0, 0), RGB(0, 255, 0), RGB(0, 0, 255)};
-        SetTextColor(hdc, colors[i]);
-        TCHAR ch[2] = {text[i], 0};
-        TextOut(hdc, x + i * (sz.cx / 3), y, ch, 1);
-    }
-    
-    SelectObject(hdc, hOldFont);
-    EndPaint(hwnd, &ps);
-}
-
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     static int cxClient, cyClient;
@@ -551,9 +515,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnFontSwitch = CreateWindow(
-                TEXT("BUTTON"), TEXT("Switch to Pixel"),
+                TEXT("BUTTON"), TEXT("Heavy Font"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                0, 0, 400, 40, hwnd, (HMENU)ID_FONT_BTN,
+                0, 0, 150, 40, hwnd, (HMENU)ID_FONT_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnDots = CreateWindow(
@@ -592,7 +556,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                     DrawEdge(lpDrawItem->hDC, &lpDrawItem->rcItem, EDGE_RAISED, BF_RECT);
                 
                 HFONT hOldFont = (HFONT)SelectObject(lpDrawItem->hDC, 
-                    g_bUsePixelFont ? hPixelBtnFont : hMinecraftBtnFont);
+                    g_bUseLightFont ? hLightBtnFont : hHeavyBtnFont);
                 
                 const TCHAR* text = TEXT("???");
                 SIZE sz;
@@ -626,7 +590,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (hBtnDarkMode)
                 MoveWindow(hBtnDarkMode, (cxClient - 180)/2, cyClient-60, 180, 50, TRUE);
             if (hBtnFontSwitch)
-                MoveWindow(hBtnFontSwitch, cxClient-410, 10, 400, 40, TRUE);
+                MoveWindow(hBtnFontSwitch, cxClient-160, 10, 150, 40, TRUE);
             if (hBtnSound)
                 MoveWindow(hBtnSound, 10, 10, 40, 40, TRUE);
             if (hBtnDots)
@@ -651,8 +615,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                     return 0;
                     
                 case ID_FONT_BTN:
-                    g_bUsePixelFont = !g_bUsePixelFont;
-                    SetWindowText(hBtnFontSwitch, g_bUsePixelFont ? TEXT("Switch to Minecraft") : TEXT("Switch to Pixel"));
+                    g_bUseLightFont = !g_bUseLightFont;
+                    SetWindowText(hBtnFontSwitch, g_bUseLightFont ? TEXT("Heavy Font") : TEXT("Light Font"));
                     UpdateButtonFonts(hwnd);
                     InvalidateRect(hwnd, NULL, FALSE);
                     return 0;
