@@ -1,6 +1,5 @@
 /*--------------------------
     CLOCK.C -- Analog Clock Program
-    (Complete self-contained version)
 ---------------------------*/
 
 #include <windows.h>
@@ -517,7 +516,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             hBtnFontSwitch = CreateWindow(
                 TEXT("BUTTON"), TEXT("Heavy Font"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-                0, 0, 150, 40, hwnd, (HMENU)ID_FONT_BTN,
+                0, 0, 180, 50, hwnd, (HMENU)ID_FONT_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnDots = CreateWindow(
@@ -590,7 +589,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (hBtnDarkMode)
                 MoveWindow(hBtnDarkMode, (cxClient - 180)/2, cyClient-60, 180, 50, TRUE);
             if (hBtnFontSwitch)
-                MoveWindow(hBtnFontSwitch, cxClient-160, 10, 150, 40, TRUE);
+                MoveWindow(hBtnFontSwitch, cxClient-190, 10, 180, 50, TRUE);
             if (hBtnSound)
                 MoveWindow(hBtnSound, 10, 10, 40, 40, TRUE);
             if (hBtnDots)
