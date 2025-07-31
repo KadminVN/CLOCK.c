@@ -514,7 +514,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
 
             hBtnFontSwitch = CreateWindow(
-                TEXT("BUTTON"), TEXT("Heavy Font"),
+                TEXT("BUTTON"), TEXT("Light Font"),
                 WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
                 0, 0, 180, 50, hwnd, (HMENU)ID_FONT_BTN,
                 ((LPCREATESTRUCT)lParam)->hInstance, NULL);
